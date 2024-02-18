@@ -5,48 +5,53 @@
 use panic_semihosting as _;
 
 use cortex_m_rt::entry;
-use stm32f1xx_hal::{adc, pac, prelude::*};
-
+use stm32f1xx_hal::{
+  gpio::gpioa::PA4,
+  gpio::{Output, PushPull},
+  pac::{Peripherals,SPI1}, 
+  prelude::*,
+  spi::{Pins, Spi, Spi1NoRemap},
+  };
+  
+use sx127x_lora::MODE;
 use cortex_m_semihosting::hprintln;
+
+fn setup() -> (
+    Spi<SPI1, Spi1NoRemap, impl Pins<Spi1NoRemap>, u8>,
+    PA4<Output<PushPull>>,
+) {
+    let dp = Peripherals::take().unwrap();
+
+    let mut flash = dp.FLASH.constrain();
+    let rcc = dp.RCC.constrain();
+
+    let clocks = rcc.cfgr.freeze(&mut flash.acr);
+
+    let mut afio = dp.AFIO.constrain();
+    let mut gpioa = dp.GPIOA.split();
+
+    // SPI1
+    let sck = gpioa.pa5.into_alternate_push_pull(&mut gpioa.crl);
+    let miso = gpioa.pa6;
+    let mosi = gpioa.pa7.into_alternate_push_pull(&mut gpioa.crl);
+    let cs = gpioa.pa4.into_push_pull_output(&mut gpioa.crl);
+
+    let spi = Spi::spi1(
+        dp.SPI1,
+        (sck, miso, mosi),
+        &mut afio.mapr,
+        MODE,
+        1.MHz(),
+        clocks,
+    );
+
+    (spi, cs)
+}
+
 
 #[entry]
 fn main() -> ! {
-    // Acquire peripherals
-    let p = pac::Peripherals::take().unwrap();
-    let mut flash = p.FLASH.constrain();
-    let rcc = p.RCC.constrain();
-
-    // Configure ADC clocks
-    // Default value is the slowest possible ADC clock: PCLK2 / 8. Meanwhile ADC
-    // clock is configurable. So its frequency may be tweaked to meet certain
-    // practical needs. User specified value is be approximated using supported
-    // prescaler values 2/4/6/8.
-    let clocks = rcc.cfgr.adcclk(2.MHz()).freeze(&mut flash.acr);
-    hprintln!("adc freq: {}", clocks.adcclk());
-
-    // Setup ADC
-    let mut adc1 = adc::Adc::adc1(p.ADC1, clocks);
-
-    #[cfg(any(feature = "stm32f103", feature = "connectivity"))]
-    let mut adc2 = adc::Adc::adc2(p.ADC2, clocks);
-
-    // Setup GPIOB
-    let mut gpiob = p.GPIOB.split();
-
-    // Configure pb0, pb1 as an analog input
-    let mut ch0 = gpiob.pb0.into_analog(&mut gpiob.crl);
-
-    #[cfg(any(feature = "stm32f103", feature = "connectivity"))]
-    let mut ch1 = gpiob.pb1.into_analog(&mut gpiob.crl);
-
-    loop {
-        let data: u16 = adc1.read(&mut ch0).unwrap();
-        hprintln!("adc1: {}", data);
-
-        #[cfg(any(feature = "stm32f103", feature = "connectivity"))]
-        {
-            let data1: u16 = adc2.read(&mut ch1).unwrap();
-            hprintln!("adc2: {}", data1);
-        }
-    }
+    // Acquire SPI
+    let (_spi, _cs) = setup(); 
+    loop{};
 }

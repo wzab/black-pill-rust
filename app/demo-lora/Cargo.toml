@@ -8,5 +8,6 @@ edition = "2021"
 cortex-m = "^0.7"
 cortex-m-rt = { version = "^0.7.3", features = ["device"] }
 cortex-m-semihosting = "^0.5"
+sx127x_lora = "0.3.1"
 stm32f1xx-hal = {version = "0.10.0", features = ["stm32f103", "rtic", "high"]}
 panic-semihosting = "^0.5.2"
